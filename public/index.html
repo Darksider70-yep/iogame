@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Wings of War .io | WWII Multiplayer Aerial Dogfight</title>
+  <meta name="description" content="Engage in adrenaline-pumping WW2 multiplayer aerial combat! Pilot Spitfires, Messerschmitts, and B-17s, upgrade your warbird, hunt Dreadnought Zeppelins, and rule the skies.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:ital,wght@0,400;0,600;0,700;1,700&family=Orbitron:wght@600;800;900&family=Rajdhani:wght@500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <!-- Canvas Canvas World -->
+  <canvas id="gameCanvas"></canvas>
+
+  <!-- Sound Mute/Unmute Float -->
+  <button id="soundToggleBtn" class="sound-toggle-btn" title="Toggle Sound FX">🔊 SFX ON</button>
+
+  <!-- LOBBY / SPAWN SCREEN -->
+  <div id="lobbyScreen" class="overlay-screen active">
+    <div class="lobby-card">
+      <div class="lobby-badge">AIR COMBAT COMMAND • 1944</div>
+      <h1 class="game-title">WINGS OF WAR<span class="dot-io">.IO</span></h1>
+      <p class="game-tagline">Authentic WW2 Multiplayer Dogfights • Aerial Fleet Warfare</p>
+
+      <div class="lobby-form">
+        <div class="input-group">
+          <label for="playerNameInput">PILOT CALLSIGN</label>
+          <input type="text" id="playerNameInput" maxlength="15" placeholder="Enter Callsign..." value="Ace Pilot" autocomplete="off" spellcheck="false">
+        </div>
+
+        <div class="starter-selection">
+          <label>SELECT STARTER WARBIRD</label>
+          <div class="starter-cards">
+            <div class="starter-card active" data-class="biplane_scout">
+              <div class="starter-icon biplane-icon"></div>
+              <div class="starter-info">
+                <h4>Sopwith Camel</h4>
+                <p>Agile Scout • Dual Machine Guns</p>
+                <div class="mini-tags">
+                  <span class="tag">Tier 1</span>
+                  <span class="tag">Balanced</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <button id="playBtn" class="deploy-btn">
+          <span class="btn-glow"></span>
+          <span class="btn-text">⚡ SCRAMBLE & DEPLOY</span>
+        </button>
+      </div>
+
+      <div class="controls-guide">
+        <div class="control-col">
+          <div class="key-combo"><span class="key">MOUSE</span> Aim Nose</div>
+          <div class="key-combo"><span class="key">LMB / SPACE</span> Fire Guns</div>
+        </div>
+        <div class="control-col">
+          <div class="key-combo"><span class="key">W / SHIFT</span> Throttle Boost</div>
+          <div class="key-combo"><span class="key">S</span> Air Brake</div>
+        </div>
+        <div class="control-col">
+          <div class="key-combo"><span class="key">E / RMB</span> Special Ability</div>
+          <div class="key-combo"><span class="key">1-8</span> Quick Upgrade</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- IN-GAME HUD -->
+  <div id="gameHud" class="hud-container hidden">
+    <!-- Top Left: Pilot Status & Level -->
+    <div class="hud-top-left">
+      <div class="pilot-panel">
+        <div class="pilot-avatar">🛩️</div>
+        <div class="pilot-details">
+          <div class="pilot-name-row">
+            <span id="hudPilotName" class="pilot-name">Ace Pilot</span>
+            <span id="hudPlaneClass" class="plane-badge">Sopwith Camel</span>
+          </div>
+          <div class="level-row">
+            <span id="hudLevelBadge" class="level-badge">LVL 1</span>
+            <div class="xp-bar-track">
+              <div id="hudXpFill" class="xp-bar-fill" style="width: 0%;"></div>
+            </div>
+            <span id="hudXpText" class="xp-text">0 / 40 XP</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Top Center: Compass Tape -->
+    <div class="hud-top-center">
+      <div class="compass-wrapper">
+        <div id="compassTape" class="compass-tape"></div>
+        <div class="compass-marker">▼</div>
+      </div>
+    </div>
+
+    <!-- Top Right: Killfeed & Leaderboard -->
+    <div class="hud-top-right">
+      <div class="hud-network-stats">
+        <span id="hudFps">60 FPS</span> • <span id="hudPing">25 ms</span>
+      </div>
+      <div class="leaderboard-card">
+        <div class="leaderboard-header">
+          <span>🏆 SQUADRON ACES</span>
+          <span class="col-score">SCORE</span>
+        </div>
+        <div id="leaderboardList" class="leaderboard-list">
+          <!-- Dynamically populated -->
+        </div>
+      </div>
+      <div id="killFeed" class="kill-feed"></div>
+    </div>
+
+    <!-- Center Aim Reticle / Lead Indicator -->
+    <div id="leadIndicator" class="lead-indicator hidden">
+      <div class="lead-circle"></div>
+      <div class="lead-dot"></div>
+      <span class="lead-tag">LEAD TARGET</span>
+    </div>
+
+    <!-- Medal / Achievement Banner -->
+    <div id="medalBanner" class="medal-banner hidden">
+      <div class="medal-icon">🎖️</div>
+      <div class="medal-content">
+        <h3 id="medalTitle">FIRST BLOOD</h3>
+        <p id="medalSubtitle">Target shot down in aerial combat!</p>
+      </div>
+    </div>
+
+    <!-- Bottom Left: Upgrade Deck -->
+    <div class="hud-bottom-left">
+      <div id="upgradeDeck" class="upgrade-deck">
+        <div class="upgrade-header">
+          <span>UPGRADES (<span id="upgradePointsCount">0</span> PTS)</span>
+          <span class="upgrade-hint">Keys [1-8]</span>
+        </div>
+        <div class="upgrade-grid">
+          <div class="upgrade-item" data-stat="bulletDamage" data-key="1">
+            <span class="upg-key">1</span>
+            <span class="upg-label">Bullet Damage</span>
+            <div class="upg-bars"><div class="bar-fill" style="width:0%"></div></div>
+            <button class="upg-btn">+</button>
+          </div>
+          <div class="upgrade-item" data-stat="fireRate" data-key="2">
+            <span class="upg-key">2</span>
+            <span class="upg-label">Fire Rate</span>
+            <div class="upg-bars"><div class="bar-fill" style="width:0%"></div></div>
+            <button class="upg-btn">+</button>
+          </div>
+          <div class="upgrade-item" data-stat="bulletSpeed" data-key="3">
+            <span class="upg-key">3</span>
+            <span class="upg-label">Bullet Velocity</span>
+            <div class="upg-bars"><div class="bar-fill" style="width:0%"></div></div>
+            <button class="upg-btn">+</button>
+          </div>
+          <div class="upgrade-item" data-stat="speed" data-key="4">
+            <span class="upg-key">4</span>
+            <span class="upg-label">Engine Speed</span>
+            <div class="upg-bars"><div class="bar-fill" style="width:0%"></div></div>
+            <button class="upg-btn">+</button>
+          </div>
+          <div class="upgrade-item" data-stat="turnRate" data-key="5">
+            <span class="upg-key">5</span>
+            <span class="upg-label">Turn Agility</span>
+            <div class="upg-bars"><div class="bar-fill" style="width:0%"></div></div>
+            <button class="upg-btn">+</button>
+          </div>
+          <div class="upgrade-item" data-stat="maxHp" data-key="6">
+            <span class="upg-key">6</span>
+            <span class="upg-label">Armor Hull</span>
+            <div class="upg-bars"><div class="bar-fill" style="width:0%"></div></div>
+            <button class="upg-btn">+</button>
+          </div>
+          <div class="upgrade-item" data-stat="hpRegen" data-key="7">
+            <span class="upg-key">7</span>
+            <span class="upg-label">Field Repair</span>
+            <div class="upg-bars"><div class="bar-fill" style="width:0%"></div></div>
+            <button class="upg-btn">+</button>
+          </div>
+          <div class="upgrade-item" data-stat="boostMax" data-key="8">
+            <span class="upg-key">8</span>
+            <span class="upg-label">Nitro Tank</span>
+            <div class="upg-bars"><div class="bar-fill" style="width:0%"></div></div>
+            <button class="upg-btn">+</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Bottom Center: Flight Telemetry & Gauges -->
+    <div class="hud-bottom-center">
+      <div class="telemetry-deck">
+        <!-- Armor Bar -->
+        <div class="gauge-card health-gauge">
+          <div class="gauge-info">
+            <span class="gauge-title">ARMOR HULL</span>
+            <span id="hpValueText" class="gauge-val">100 / 100</span>
+          </div>
+          <div class="gauge-track">
+            <div id="hpFill" class="gauge-fill hp-fill" style="width: 100%;"></div>
+          </div>
+        </div>
+
+        <!-- Overheat Bar -->
+        <div class="gauge-card heat-gauge">
+          <div class="gauge-info">
+            <span class="gauge-title">GUN HEAT</span>
+            <span id="heatStatusText" class="gauge-val">NORMAL</span>
+          </div>
+          <div class="gauge-track">
+            <div id="heatFill" class="gauge-fill heat-fill" style="width: 0%;"></div>
+          </div>
+        </div>
+
+        <!-- Boost Fuel Bar -->
+        <div class="gauge-card boost-gauge">
+          <div class="gauge-info">
+            <span class="gauge-title">BOOST NITRO</span>
+            <span id="boostValueText" class="gauge-val">100%</span>
+          </div>
+          <div class="gauge-track">
+            <div id="boostFill" class="gauge-fill boost-fill" style="width: 100%;"></div>
+          </div>
+        </div>
+
+        <!-- Special Ability Widget -->
+        <div id="specialAbilityWidget" class="special-widget">
+          <div class="special-icon">⚡</div>
+          <div class="special-info">
+            <span id="specialName" class="special-name">Evasive Roll</span>
+            <span id="specialStatus" class="special-status ready">READY [E / RMB]</span>
+          </div>
+          <div id="specialCooldownOverlay" class="special-cd-overlay" style="height: 0%;"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Bottom Right: Radar / Minimap -->
+    <div class="hud-bottom-right">
+      <div class="radar-card">
+        <canvas id="radarCanvas" width="180" height="180"></canvas>
+        <div class="radar-scanline"></div>
+        <div class="radar-crosshair"></div>
+        <div class="radar-legend">
+          <span class="legend-item"><span class="dot self"></span> YOU</span>
+          <span class="legend-item"><span class="dot enemy"></span> ENEMY</span>
+          <span class="legend-item"><span class="dot boss"></span> ZEPPELIN</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- EVOLUTION POPUP MODAL -->
+  <div id="evolutionModal" class="overlay-screen hidden">
+    <div class="evolution-card">
+      <div class="evo-badge">SQUADRON ADVANCEMENT READY</div>
+      <h2>EVOLVE YOUR WARBIRD</h2>
+      <p>Select your next combat archetype to adapt your tactical dogfighting style.</p>
+
+      <div id="evolutionOptions" class="evo-options-grid">
+        <!-- Dynamically rendered based on available evolutions -->
+      </div>
+    </div>
+  </div>
+
+  <!-- DEATH / DEBRIEF SCREEN -->
+  <div id="deathScreen" class="overlay-screen hidden">
+    <div class="death-card">
+      <div class="skull-badge">💥 SHOT DOWN IN ACTION</div>
+      <h2 id="deathReasonTitle">YOU WERE SHOT DOWN</h2>
+      <p id="deathKilledBy" class="death-by">Shot down by Enemy Pilot</p>
+
+      <div class="battle-stats-grid">
+        <div class="stat-box">
+          <span class="stat-label">PILOT SCORE</span>
+          <span id="finalScore" class="stat-num">0</span>
+        </div>
+        <div class="stat-box">
+          <span class="stat-label">CONFIRMED KILLS</span>
+          <span id="finalKills" class="stat-num">0</span>
+        </div>
+        <div class="stat-box">
+          <span class="stat-label">HIGHEST LEVEL</span>
+          <span id="finalLevel" class="stat-num">1</span>
+        </div>
+      </div>
+
+      <div class="respawn-class-select">
+        <label>RESPAWN WARBIRD:</label>
+        <select id="respawnClassSelect">
+          <option value="biplane_scout">Sopwith Camel (Tier 1 Scout)</option>
+        </select>
+      </div>
+
+      <button id="respawnBtn" class="deploy-btn">
+        <span class="btn-glow"></span>
+        <span class="btn-text">🔄 RE-ENGAGE COMBAT</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- Scripts -->
+  <script src="js/planeModels.js"></script>
+  <script src="js/sound.js"></script>
+  <script src="js/renderer.js"></script>
+  <script src="js/ui.js"></script>
+  <script src="js/game.js"></script>
+</body>
+</html>
