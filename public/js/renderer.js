@@ -1,16 +1,16 @@
 /**
- * Canvas 2D Game Renderer with Camera interpolation, Parallax Ocean, Clouds, Particles, and Tracers.
+ * Canvas 2D Game Renderer with Smooth Lookahead Camera, Dynamic Contrails, Parallax Ocean, Clouds, and Interpolation.
  */
 
 class Renderer {
   constructor(canvas) {
     this.canvas = canvas;
     this.ctx = canvas.getContext('2d');
-    this.camera = { x: 3000, y: 3000, zoom: 1.0, targetZoom: 1.0 };
-    this.screenShake = 0;
+    this.camera = { x: 3000, y: 3000, zoom: 0.94, targetZoom: 0.94 };
     this.propSpinAngle = 0;
     this.particles = [];
     this.waveOffset = 0;
+    this.planeRenderStates = new Map(); // id -> { x, y, a, bk, vx, vy }
 
     this.resize();
     window.addEventListener('resize', () => this.resize());
@@ -21,94 +21,148 @@ class Renderer {
     this.canvas.height = window.innerHeight;
   }
 
-  addScreenShake(intensity) {
-    this.screenShake = Math.min(25, this.screenShake + intensity);
-  }
-
   addParticle(p) {
     this.particles.push(p);
   }
 
   createExplosion(x, y, radius = 60, projType = 'bullet') {
     const isLarge = radius > 50;
-    const count = isLarge ? 35 : 18;
-
-    this.addScreenShake(isLarge ? 12 : 5);
+    const count = isLarge ? 25 : 12;
 
     // Shockwave ring
     this.addParticle({
       type: 'shockwave',
       x, y,
       r: 10,
-      maxR: radius * 1.5,
-      life: 0.35,
-      maxLife: 0.35,
+      maxR: radius * 1.4,
+      life: 0.3,
+      maxLife: 0.3,
       color: '#ffa502'
     });
 
     // Fire and smoke debris
     for (let i = 0; i < count; i++) {
       const angle = Math.random() * Math.PI * 2;
-      const speed = (Math.random() * 200 + 50) * (isLarge ? 1.5 : 1.0);
+      const speed = (Math.random() * 180 + 40) * (isLarge ? 1.4 : 1.0);
       this.addParticle({
         type: 'fire',
         x, y,
         vx: Math.cos(angle) * speed,
         vy: Math.sin(angle) * speed,
-        r: Math.random() * 8 + 6,
-        life: Math.random() * 0.4 + 0.3,
-        maxLife: 0.7,
+        r: Math.random() * 7 + 5,
+        life: Math.random() * 0.35 + 0.25,
+        maxLife: 0.6,
         color: Math.random() > 0.4 ? '#ff4757' : '#ffa502'
       });
 
       // Dark smoke plume
       this.addParticle({
         type: 'smoke',
-        x: x + (Math.random() - 0.5) * 20,
-        y: y + (Math.random() - 0.5) * 20,
-        vx: Math.cos(angle) * (speed * 0.4),
-        vy: Math.sin(angle) * (speed * 0.4),
-        r: Math.random() * 12 + 10,
-        life: Math.random() * 0.8 + 0.5,
-        maxLife: 1.3,
+        x: x + (Math.random() - 0.5) * 15,
+        y: y + (Math.random() - 0.5) * 15,
+        vx: Math.cos(angle) * (speed * 0.35),
+        vy: Math.sin(angle) * (speed * 0.35),
+        r: Math.random() * 10 + 8,
+        life: Math.random() * 0.7 + 0.4,
+        maxLife: 1.1,
         color: 'rgba(30, 41, 59, '
       });
     }
   }
 
-  update(dt, selfPlayer) {
+  update(dt, selfPlayer, planes = []) {
     this.propSpinAngle += dt * 35;
     this.waveOffset += dt * 15;
 
-    // Smooth Camera Follow
-    if (selfPlayer) {
-      this.camera.x += (selfPlayer.x - this.camera.x) * Math.min(1, dt * 6.0);
-      this.camera.y += (selfPlayer.y - this.camera.y) * Math.min(1, dt * 6.0);
+    // Update Plane Interpolation States
+    planes.forEach(p => {
+      let state = this.planeRenderStates.get(p.id);
+      if (!state) {
+        state = {
+          x: p.x,
+          y: p.y,
+          a: p.a,
+          bk: p.bk || 0,
+          vx: p.vx || 0,
+          vy: p.vy || 0
+        };
+        this.planeRenderStates.set(p.id, state);
+      } else {
+        // Smooth 60 FPS interpolation towards server state
+        const lerpPos = Math.min(1, dt * 15.0);
+        state.x += (p.x - state.x) * lerpPos;
+        state.y += (p.y - state.y) * lerpPos;
 
-      // Camera zoom dynamic with speed / boost
-      this.camera.targetZoom = selfPlayer.bst ? 0.88 : 0.95;
-      this.camera.zoom += (this.camera.targetZoom - this.camera.zoom) * Math.min(1, dt * 3.0);
+        // Angle lerp shortest path
+        let angleDiff = p.a - state.a;
+        while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
+        while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
+        state.a += angleDiff * Math.min(1, dt * 18.0);
+
+        state.bk += ((p.bk || 0) - state.bk) * Math.min(1, dt * 12.0);
+      }
+
+      // Aerodynamic Wingtip Contrails (Tight Turns or Nitro Boost)
+      const isHighG = Math.abs(state.bk) > 0.45 || p.bst;
+      if (isHighG && Math.random() > 0.3) {
+        const wingDist = (p.r || 24) * 0.9;
+        const perpX = -Math.sin(state.a);
+        const perpY = Math.cos(state.a);
+
+        [-1, 1].forEach(side => {
+          this.addParticle({
+            type: 'contrail',
+            x: state.x + perpX * (wingDist * side) - Math.cos(state.a) * 8,
+            y: state.y + perpY * (wingDist * side) - Math.sin(state.a) * 8,
+            vx: -Math.cos(state.a) * 20,
+            vy: -Math.sin(state.a) * 20,
+            r: p.bst ? 3.5 : 2.0,
+            life: 0.3,
+            maxLife: 0.3,
+            color: 'rgba(255, 255, 255, '
+          });
+        });
+      }
+    });
+
+    // Clean up disconnected planes
+    const activeIds = new Set(planes.map(p => p.id));
+    for (let id of this.planeRenderStates.keys()) {
+      if (!activeIds.has(id)) {
+        this.planeRenderStates.delete(id);
+      }
+    }
+
+    // Dynamic Lookahead Smooth Camera Follow (Rock Steady, No Shake)
+    if (selfPlayer) {
+      const selfState = this.planeRenderStates.get(selfPlayer.id) || selfPlayer;
+      const lookDist = selfPlayer.bst ? 120 : 70;
+      const targetCamX = selfState.x + Math.cos(selfState.a) * lookDist;
+      const targetCamY = selfState.y + Math.sin(selfState.a) * lookDist;
+
+      const camLerp = Math.min(1, dt * 7.5);
+      this.camera.x += (targetCamX - this.camera.x) * camLerp;
+      this.camera.y += (targetCamY - this.camera.y) * camLerp;
+
+      // Camera dynamic zoom based on boost
+      this.camera.targetZoom = selfPlayer.bst ? 0.90 : 0.96;
+      this.camera.zoom += (this.camera.targetZoom - this.camera.zoom) * Math.min(1, dt * 2.5);
 
       // Damaged plane smoke trail
       const hpRatio = selfPlayer.hp / selfPlayer.mhp;
       if (hpRatio < 0.45) {
         this.addParticle({
           type: 'smoke',
-          x: selfPlayer.x - Math.cos(selfPlayer.a) * 20,
-          y: selfPlayer.y - Math.sin(selfPlayer.a) * 20,
-          vx: (Math.random() - 0.5) * 20,
-          vy: (Math.random() - 0.5) * 20,
-          r: Math.random() * 8 + 6,
-          life: 0.6,
-          maxLife: 0.6,
+          x: selfState.x - Math.cos(selfState.a) * 20,
+          y: selfState.y - Math.sin(selfState.a) * 20,
+          vx: (Math.random() - 0.5) * 15,
+          vy: (Math.random() - 0.5) * 15,
+          r: Math.random() * 7 + 5,
+          life: 0.5,
+          maxLife: 0.5,
           color: hpRatio < 0.2 ? 'rgba(239, 68, 68, ' : 'rgba(51, 65, 85, '
         });
       }
-    }
-
-    // Screen Shake decay
-    if (this.screenShake > 0) {
-      this.screenShake = Math.max(0, this.screenShake - dt * 25);
     }
 
     // Update Particles
@@ -126,7 +180,7 @@ class Renderer {
       } else {
         p.x += (p.vx || 0) * dt;
         p.y += (p.vy || 0) * dt;
-        p.r *= (1 + dt * 0.4); // expand
+        p.r *= (1 + dt * 0.3);
       }
     }
   }
@@ -140,12 +194,8 @@ class Renderer {
 
     ctx.save();
 
-    // Screen Shake Offset
-    let shakeX = (Math.random() - 0.5) * this.screenShake;
-    let shakeY = (Math.random() - 0.5) * this.screenShake;
-
-    // Apply Camera Transform
-    ctx.translate(width / 2 + shakeX, height / 2 + shakeY);
+    // 100% Steady Camera Transform (Zero Shake)
+    ctx.translate(width / 2, height / 2);
     ctx.scale(this.camera.zoom, this.camera.zoom);
     ctx.translate(-this.camera.x, -this.camera.y);
 
@@ -166,24 +216,33 @@ class Renderer {
       gameState.zeppelins.forEach(z => window.PlaneModels.drawZeppelin(ctx, z));
     }
 
-    // 6. Draw Planes
+    // 6. Draw Particles (Smoke, Contrails, Shockwaves)
+    this.drawParticles(ctx);
+
+    // 7. Draw Planes with Smoothed Interpolation
     if (gameState.planes) {
       gameState.planes.forEach(p => {
+        const smoothState = this.planeRenderStates.get(p.id) || p;
+        const renderPlane = {
+          ...p,
+          x: smoothState.x,
+          y: smoothState.y,
+          a: smoothState.a,
+          bk: smoothState.bk
+        };
+
         ctx.save();
-        if (p.cld) ctx.globalAlpha = 0.35; // Cloud stealth transparency
-        window.PlaneModels.drawPlane(ctx, p, this.propSpinAngle);
-        this.drawPlaneHUD(ctx, p, p.id === selfId);
+        if (p.cld) ctx.globalAlpha = 0.35; // Cloud stealth
+        window.PlaneModels.drawPlane(ctx, renderPlane, this.propSpinAngle);
+        this.drawPlaneHUD(ctx, renderPlane, p.id === selfId);
         ctx.restore();
       });
     }
 
-    // 7. Draw Projectiles & Tracers
+    // 8. Draw Projectiles & Tracers
     this.drawProjectiles(ctx, gameState.projectiles);
 
-    // 8. Draw Particle Effects
-    this.drawParticles(ctx);
-
-    // 9. Draw Volumetric Clouds on top (semi-transparent ceiling)
+    // 9. Draw Volumetric Clouds
     this.drawClouds(ctx, gameState.clouds);
 
     ctx.restore();
@@ -193,11 +252,9 @@ class Renderer {
     const w = world ? world.width : 6000;
     const h = world ? world.height : 6000;
 
-    // Deep naval sea blue
     ctx.fillStyle = '#0f2438';
     ctx.fillRect(0, 0, w, h);
 
-    // Grid water ripples
     ctx.strokeStyle = 'rgba(76, 224, 210, 0.04)';
     ctx.lineWidth = 1;
     const gridSize = 120;
@@ -215,8 +272,7 @@ class Renderer {
       ctx.stroke();
     }
 
-    // Animated gentle wave lines
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.05)';
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.04)';
     ctx.lineWidth = 2;
     for (let y = 100; y < h; y += 280) {
       for (let x = 100; x < w; x += 320) {
@@ -241,31 +297,26 @@ class Renderer {
 
   drawIslands(ctx, islands = [], flakTowers = []) {
     islands.forEach(isl => {
-      // Sand rim
       ctx.fillStyle = '#d4a373';
       ctx.beginPath();
       ctx.arc(isl.x, isl.y, isl.radius, 0, Math.PI * 2);
       ctx.fill();
 
-      // Lush Jungle Center
       ctx.fillStyle = '#2d6a4f';
       ctx.beginPath();
       ctx.arc(isl.x, isl.y, isl.radius * 0.8, 0, Math.PI * 2);
       ctx.fill();
 
-      // Fortress bunker concrete
       ctx.fillStyle = '#475569';
       ctx.fillRect(isl.x - 22, isl.y - 22, 44, 44);
     });
 
-    // Flak Turret Gun Barrels
     flakTowers.forEach(flak => {
       if (flak.dead) return;
       ctx.save();
       ctx.translate(flak.x, flak.y);
       ctx.rotate(flak.a);
 
-      // Gun base
       ctx.beginPath();
       ctx.arc(0, 0, 12, 0, Math.PI * 2);
       ctx.fillStyle = '#1e293b';
@@ -274,7 +325,6 @@ class Renderer {
       ctx.lineWidth = 1.5;
       ctx.stroke();
 
-      // Dual heavy flak barrels
       ctx.fillStyle = '#0f172a';
       ctx.fillRect(4, -5, 20, 4);
       ctx.fillRect(4, 1, 20, 4);
@@ -287,33 +337,28 @@ class Renderer {
       ctx.save();
       ctx.translate(c.x, c.y);
 
-      // Floating bob shadow
       ctx.fillStyle = 'rgba(0, 0, 0, 0.2)';
       ctx.beginPath();
       ctx.ellipse(4, 6, 14, 8, 0, 0, Math.PI * 2);
       ctx.fill();
 
-      // Crate box
-      let color = '#e5a93b'; // gold
+      let color = '#e5a93b';
       let icon = '★';
       if (c.type === 'repair') { color = '#2ed573'; icon = '+'; }
       else if (c.type === 'ammo') { color = '#ffa502'; icon = '⚡'; }
       else if (c.type === 'fuel') { color = '#4ce0d2'; icon = '▲'; }
 
-      // Glow beacon
       ctx.beginPath();
       ctx.arc(0, 0, 18, 0, Math.PI * 2);
       ctx.fillStyle = color + '22';
       ctx.fill();
 
-      // Box body
       ctx.fillStyle = '#334155';
       ctx.strokeStyle = color;
       ctx.lineWidth = 2;
       ctx.fillRect(-12, -12, 24, 24);
       ctx.strokeRect(-12, -12, 24, 24);
 
-      // Icon symbol
       ctx.fillStyle = color;
       ctx.font = 'bold 12px Orbitron, sans-serif';
       ctx.textAlign = 'center';
@@ -328,13 +373,11 @@ class Renderer {
     ctx.save();
     ctx.translate(p.x, p.y);
 
-    // Nametag
     ctx.font = 'bold 11px Chakra Petch, monospace';
     ctx.textAlign = 'center';
     ctx.fillStyle = isSelf ? '#4ce0d2' : p.bot ? '#cbd5e1' : '#f1f2f6';
     ctx.fillText(`${p.n} [Lvl ${p.lvl}]`, 0, -38);
 
-    // Mini Health Bar
     const hpRatio = Math.max(0, Math.min(1, p.hp / p.mhp));
     const barW = 44;
     const barH = 5;
@@ -358,7 +401,6 @@ class Renderer {
       ctx.rotate(proj.a);
 
       if (proj.t === 'rocket') {
-        // Rocket Body
         ctx.fillStyle = '#64748b';
         ctx.fillRect(-10, -3, 20, 6);
         ctx.fillStyle = '#ef4444';
@@ -369,7 +411,6 @@ class Renderer {
         ctx.closePath();
         ctx.fill();
 
-        // Rocket exhaust trail
         ctx.fillStyle = '#ffa502';
         ctx.beginPath();
         ctx.moveTo(-10, -2);
@@ -378,7 +419,6 @@ class Renderer {
         ctx.closePath();
         ctx.fill();
       } else if (proj.t === 'bomb') {
-        // Aerial Bomb
         ctx.fillStyle = '#1e293b';
         ctx.beginPath();
         ctx.ellipse(0, 0, 10, 6, 0, 0, Math.PI * 2);
@@ -386,7 +426,6 @@ class Renderer {
         ctx.fillStyle = '#dc2626';
         ctx.fillRect(-10, -5, 4, 10);
       } else if (proj.t === 'heavy_cannon') {
-        // Glowing Heavy 30mm/37mm Tracer
         ctx.fillStyle = '#ffa502';
         ctx.beginPath();
         ctx.ellipse(0, 0, 12, 4, 0, 0, Math.PI * 2);
@@ -396,7 +435,6 @@ class Renderer {
         ctx.ellipse(2, 0, 8, 2, 0, 0, Math.PI * 2);
         ctx.fill();
       } else {
-        // Machine gun tracer round
         ctx.fillStyle = '#e5a93b';
         ctx.fillRect(-8, -2, 16, 4);
         ctx.fillStyle = '#ffffff';
@@ -423,6 +461,11 @@ class Renderer {
         ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
         ctx.fillStyle = `${p.color}${alpha * 0.45})`;
         ctx.fill();
+      } else if (p.type === 'contrail') {
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+        ctx.fillStyle = `rgba(255, 255, 255, ${alpha * 0.35})`;
+        ctx.fill();
       } else if (p.type === 'fire') {
         ctx.beginPath();
         ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
@@ -439,7 +482,6 @@ class Renderer {
       ctx.save();
       ctx.translate(c.x, c.y);
 
-      // Fluffy Cloud Puffs
       ctx.fillStyle = 'rgba(240, 246, 252, 0.45)';
       ctx.shadowColor = 'rgba(255, 255, 255, 0.2)';
       ctx.shadowBlur = 20;
@@ -456,7 +498,6 @@ class Renderer {
         ctx.fill();
       }
 
-      // Center core
       ctx.beginPath();
       ctx.arc(0, 0, c.radius * 0.65, 0, Math.PI * 2);
       ctx.fill();

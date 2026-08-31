@@ -259,24 +259,27 @@ class GameClient {
 
     // Process transient audio/visual events
     if (stateData.events && stateData.events.length > 0) {
+      const self = stateData.self;
       stateData.events.forEach(evt => {
-        if (evt.type === 'hit') {
-          // Play hit spark
-          if (evt.targetId === this.playerId) {
-            this.renderer.addScreenShake(6);
+        const distToSelf = self ? Math.hypot(evt.x - self.x, evt.y - self.y) : 9999;
+        const isNearby = distToSelf < 1400;
+
+        if (evt.type === 'explosion') {
+          if (isNearby) {
+            this.renderer.createExplosion(evt.x, evt.y, evt.radius, evt.projType);
+            this.sound.playExplosion(evt.radius > 60);
           }
-        } else if (evt.type === 'explosion') {
-          this.renderer.createExplosion(evt.x, evt.y, evt.radius, evt.projType);
-          this.sound.playExplosion(evt.radius > 60);
         } else if (evt.type === 'crate_pickup') {
           if (evt.playerId === this.playerId) {
             this.sound.playPickup();
           }
         } else if (evt.type === 'plane_crash') {
-          this.renderer.createExplosion(evt.x, evt.y, 80);
-          this.sound.playExplosion(true);
+          if (isNearby) {
+            this.renderer.createExplosion(evt.x, evt.y, 80, 'bullet');
+            this.sound.playExplosion(true);
+          }
         } else if (evt.type === 'special_fx') {
-          if (evt.effect === 'heavy_rockets') {
+          if (evt.effect === 'heavy_rockets' && isNearby) {
             this.sound.playRocketLaunch();
           }
         } else if (evt.type === 'medal' && evt.playerId === this.playerId) {
@@ -352,9 +355,9 @@ class GameClient {
       // Input broadcast (~30-60Hz)
       this.sendInputs();
 
-      // Render update
+      // Render update with full entity interpolation
       const self = this.gameState.self;
-      this.renderer.update(dt, self);
+      this.renderer.update(dt, self, this.gameState.planes || []);
       this.renderer.render(this.gameState, this.playerId);
 
       requestAnimationFrame(loop);

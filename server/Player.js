@@ -238,7 +238,7 @@ class Player {
     }
 
     // Acceleration towards target speed
-    this.speed += (targetSpeed - this.speed) * Math.min(1, dt * 4.0);
+    this.speed += (targetSpeed - this.speed) * Math.min(1, dt * 4.5);
 
     // Smooth Turning & Angle Steering
     let angleDiff = this.input.targetAngle - this.angle;
@@ -249,22 +249,29 @@ class Player {
     const actualTurn = Math.max(-maxTurn, Math.min(maxTurn, angleDiff));
     this.angle += actualTurn;
 
-    // Banking visual tilt (-1 to 1)
-    const targetBank = Math.max(-1, Math.min(1, actualTurn / (turnRate * dt + 0.0001)));
-    this.bankAngle += (targetBank - this.bankAngle) * Math.min(1, dt * 8.0);
+    // Banking visual tilt (-1 to 1) with smooth deadzone
+    let targetBank = 0;
+    if (Math.abs(angleDiff) > 0.04) {
+      targetBank = Math.max(-1, Math.min(1, actualTurn / (turnRate * dt + 0.0001)));
+    }
+    this.bankAngle += (targetBank - this.bankAngle) * Math.min(1, dt * 7.0);
 
-    // Physics Movement
-    this.vx = Math.cos(this.angle) * this.speed;
-    this.vy = Math.sin(this.angle) * this.speed;
+    // Aerodynamic flight dynamics with realistic inertia and lateral grip
+    const thrustX = Math.cos(this.angle) * this.speed;
+    const thrustY = Math.sin(this.angle) * this.speed;
+    const aeroGrip = Math.min(1, dt * 7.5);
+    this.vx += (thrustX - this.vx) * aeroGrip;
+    this.vy += (thrustY - this.vy) * aeroGrip;
+
     this.x += this.vx * dt;
     this.y += this.vy * dt;
 
-    // Boundary constraints
-    const pad = 60;
-    if (this.x < pad) { this.x = pad; }
-    if (this.x > worldWidth - pad) { this.x = worldWidth - pad; }
-    if (this.y < pad) { this.y = pad; }
-    if (this.y > worldHeight - pad) { this.y = worldHeight - pad; }
+    // Soft Boundary constraints with smooth inward nudge
+    const pad = 120;
+    if (this.x < pad) { this.x = pad; this.vx = Math.max(0, this.vx); }
+    if (this.x > worldWidth - pad) { this.x = worldWidth - pad; this.vx = Math.min(0, this.vx); }
+    if (this.y < pad) { this.y = pad; this.vy = Math.max(0, this.vy); }
+    if (this.y > worldHeight - pad) { this.y = worldHeight - pad; this.vy = Math.min(0, this.vy); }
 
     // Gun Shooting
     this.shootCooldown -= dt;
@@ -458,6 +465,8 @@ class Player {
       cls: this.planeClassKey,
       x: Math.round(this.x),
       y: Math.round(this.y),
+      vx: Math.round(this.vx),
+      vy: Math.round(this.vy),
       a: Number(this.angle.toFixed(2)),
       bk: Number(this.bankAngle.toFixed(2)),
       hp: Math.round(this.hp),
