@@ -385,7 +385,7 @@ class Player {
         y: this.y + Math.sin(this.angle) * 30,
         angle: this.angle,
         speed: 950,
-        damage: 65,
+        damage: 35,
         radius: 7,
         splashRadius: 40
       });
@@ -400,7 +400,7 @@ class Player {
             y: this.y - Math.sin(this.angle) * 20,
             angle: this.angle + Math.PI + (Math.random() - 0.5) * 0.3,
             speed: 120,
-            damage: 85,
+            damage: 48,
             maxLifeTime: 1.2,
             radius: 8,
             splashRadius: 100
@@ -419,7 +419,7 @@ class Player {
           y: this.y + perpY * (side * 22),
           angle: this.angle,
           speed: 450,
-          damage: 75,
+          damage: 42,
           range: 1400,
           radius: 6,
           splashRadius: 75

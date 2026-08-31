@@ -13,15 +13,15 @@ class Zeppelin {
     this.speed = 70;
     this.radius = 70; // large collision hull
     this.level = level;
-    this.maxHp = 900 + level * 300;
+    this.maxHp = 2200 + level * 600;
     this.hp = this.maxHp;
     this.isDead = false;
 
     // Turrets: 3 turrets (Nose, Mid, Tail)
     this.turrets = [
-      { offsetDist: -45, offsetAngle: 0, angle: 0, cooldown: 0, fireRate: 2.2, range: 450, damage: 12 },
-      { offsetDist: 0, offsetAngle: 0, angle: 0, cooldown: 0, fireRate: 2.5, range: 480, damage: 14 },
-      { offsetDist: 45, offsetAngle: 0, angle: 0, cooldown: 0, fireRate: 2.2, range: 450, damage: 12 }
+      { offsetDist: -45, offsetAngle: 0, angle: 0, cooldown: 0, fireRate: 2.2, range: 450, damage: 5.0 },
+      { offsetDist: 0, offsetAngle: 0, angle: 0, cooldown: 0, fireRate: 2.5, range: 480, damage: 6.0 },
+      { offsetDist: 45, offsetAngle: 0, angle: 0, cooldown: 0, fireRate: 2.2, range: 450, damage: 5.0 }
     ];
 
     this.turnTimer = 0;
@@ -133,8 +133,8 @@ class FlakTower {
     this.cooldown = 0;
     this.fireRate = 0.7; // fires heavy flak bursts
     this.angle = 0;
-    this.hp = 300;
-    this.maxHp = 300;
+    this.hp = 700;
+    this.maxHp = 700;
     this.isDead = false;
   }
 
@@ -167,7 +167,7 @@ class FlakTower {
           y: this.y,
           angle: this.angle + (Math.random() - 0.5) * 0.1,
           speed: 550,
-          damage: 35,
+          damage: 18,
           targetDist: targetDist,
           splashRadius: 80
         });
