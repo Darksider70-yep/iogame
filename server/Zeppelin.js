@@ -112,13 +112,13 @@ class Zeppelin {
   serialize() {
     return {
       id: this.id,
-      x: Math.round(this.x),
-      y: Math.round(this.y),
-      a: Number(this.angle.toFixed(2)),
+      x: (this.x + 0.5) | 0,
+      y: (this.y + 0.5) | 0,
+      a: Math.round(this.angle * 100) / 100,
       hp: Math.round(this.hp),
       maxHp: this.maxHp,
       r: this.radius,
-      turrets: this.turrets.map(t => Number(t.angle.toFixed(2)))
+      turrets: this.turrets.map(t => Math.round(t.angle * 100) / 100)
     };
   }
 }
@@ -186,9 +186,9 @@ class FlakTower {
   serialize() {
     return {
       id: this.id,
-      x: Math.round(this.x),
-      y: Math.round(this.y),
-      a: Number(this.angle.toFixed(2)),
+      x: (this.x + 0.5) | 0,
+      y: (this.y + 0.5) | 0,
+      a: Math.round(this.angle * 100) / 100,
       hp: Math.round(this.hp),
       maxHp: this.maxHp,
       dead: this.isDead

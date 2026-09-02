@@ -463,12 +463,12 @@ class Player {
       id: this.id,
       n: this.name,
       cls: this.planeClassKey,
-      x: Math.round(this.x),
-      y: Math.round(this.y),
-      vx: Math.round(this.vx),
-      vy: Math.round(this.vy),
-      a: Number(this.angle.toFixed(2)),
-      bk: Number(this.bankAngle.toFixed(2)),
+      x: (this.x + 0.5) | 0,
+      y: (this.y + 0.5) | 0,
+      vx: (this.vx + 0.5) | 0,
+      vy: (this.vy + 0.5) | 0,
+      a: Math.round(this.angle * 100) / 100,
+      bk: Math.round(this.bankAngle * 100) / 100,
       hp: Math.round(this.hp),
       mhp: this.maxHp,
       lvl: this.level,
@@ -484,14 +484,14 @@ class Player {
     if (isSelf) {
       data.xp = this.xp;
       data.nxp = this.xpForNextLevel;
-      data.bstVal = Math.round(this.boost);
+      data.bstVal = (this.boost + 0.5) | 0;
       data.bstMax = this.boostMax;
-      data.heat = Math.round(this.heat);
+      data.heat = (this.heat + 0.5) | 0;
       data.ovh = this.isOverheated;
       data.pts = this.availableUpgradePoints;
       data.upg = this.upgrades;
       data.evos = this.availableEvolutions;
-      data.spCd = Number(Math.max(0, this.specialCooldown).toFixed(1));
+      data.spCd = Math.round(Math.max(0, this.specialCooldown) * 10) / 10;
     }
 
     return data;

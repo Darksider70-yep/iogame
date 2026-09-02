@@ -72,9 +72,9 @@ class Projectile {
     return {
       id: this.id,
       t: this.type,
-      x: Math.round(this.x),
-      y: Math.round(this.y),
-      a: Number(this.angle.toFixed(2)),
+      x: (this.x + 0.5) | 0,
+      y: (this.y + 0.5) | 0,
+      a: Math.round(this.angle * 100) / 100,
       s: this.shooterId,
       r: this.radius
     };
