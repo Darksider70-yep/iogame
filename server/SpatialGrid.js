@@ -1,5 +1,5 @@
 /**
- * Spatial Grid for fast 2D broadphase collision checks and AOI queries.
+ * High-performance 1D Flat Spatial Grid for zero-allocation broadphase collision checks.
  */
 class SpatialGrid {
   constructor(worldWidth, worldHeight, cellSize = 400) {
@@ -8,45 +8,48 @@ class SpatialGrid {
     this.cellSize = cellSize;
     this.cols = Math.ceil(worldWidth / cellSize);
     this.rows = Math.ceil(worldHeight / cellSize);
-    this.cells = new Map();
+    this.cellCount = this.cols * this.rows;
+    this.cells = new Array(this.cellCount);
+    for (let i = 0; i < this.cellCount; i++) {
+      this.cells[i] = [];
+    }
   }
 
-  _getKey(cellX, cellY) {
-    return `${cellX},${cellY}`;
+  _getCellIndex(cx, cy) {
+    return cy * this.cols + cx;
   }
 
   _getCellCoords(x, y) {
-    const cx = Math.max(0, Math.min(this.cols - 1, Math.floor(x / this.cellSize)));
-    const cy = Math.max(0, Math.min(this.rows - 1, Math.floor(y / this.cellSize)));
+    const cx = Math.max(0, Math.min(this.cols - 1, (x / this.cellSize) | 0));
+    const cy = Math.max(0, Math.min(this.rows - 1, (y / this.cellSize) | 0));
     return { cx, cy };
   }
 
   clear() {
-    this.cells.clear();
+    for (let i = 0; i < this.cellCount; i++) {
+      this.cells[i].length = 0;
+    }
   }
 
   insert(entity) {
-    const { cx, cy } = this._getCellCoords(entity.x, entity.y);
-    const key = this._getKey(cx, cy);
-    if (!this.cells.has(key)) {
-      this.cells.set(key, []);
-    }
-    this.cells.get(key).push(entity);
+    const cx = Math.max(0, Math.min(this.cols - 1, (entity.x / this.cellSize) | 0));
+    const cy = Math.max(0, Math.min(this.rows - 1, (entity.y / this.cellSize) | 0));
+    this.cells[cy * this.cols + cx].push(entity);
   }
 
   getNearby(x, y, radius = 400) {
-    const minC = this._getCellCoords(x - radius, y - radius);
-    const maxC = this._getCellCoords(x + radius, y + radius);
+    const minCx = Math.max(0, Math.min(this.cols - 1, ((x - radius) / this.cellSize) | 0));
+    const minCy = Math.max(0, Math.min(this.rows - 1, ((y - radius) / this.cellSize) | 0));
+    const maxCx = Math.max(0, Math.min(this.cols - 1, ((x + radius) / this.cellSize) | 0));
+    const maxCy = Math.max(0, Math.min(this.rows - 1, ((y + radius) / this.cellSize) | 0));
     const results = [];
 
-    for (let cy = minC.cy; cy <= maxC.cy; cy++) {
-      for (let cx = minC.cx; cx <= maxC.cx; cx++) {
-        const key = this._getKey(cx, cy);
-        const list = this.cells.get(key);
-        if (list) {
-          for (let i = 0; i < list.length; i++) {
-            results.push(list[i]);
-          }
+    for (let cy = minCy; cy <= maxCy; cy++) {
+      const rowOffset = cy * this.cols;
+      for (let cx = minCx; cx <= maxCx; cx++) {
+        const list = this.cells[rowOffset + cx];
+        for (let i = 0; i < list.length; i++) {
+          results.push(list[i]);
         }
       }
     }

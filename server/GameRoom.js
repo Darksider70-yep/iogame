@@ -568,12 +568,9 @@ class GameRoom {
       crates: visibleCrates,
       zeppelins: visibleZeppelins,
       flakTowers: flakData,
-      clouds: this.clouds,
-      islands: this.islands,
       leaderboard: this.getLeaderboard(),
       killFeed: this.killFeed,
-      events: this.events,
-      world: { width: this.worldWidth, height: this.worldHeight }
+      events: this.events
     };
   }
 

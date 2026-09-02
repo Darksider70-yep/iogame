@@ -255,7 +255,13 @@ class GameClient {
   }
 
   handleStateUpdate(stateData) {
-    this.gameState = stateData;
+    this.gameState = {
+      ...this.gameState,
+      ...stateData,
+      clouds: stateData.clouds || this.gameState.clouds,
+      islands: stateData.islands || this.gameState.islands,
+      world: stateData.world || this.gameState.world
+    };
 
     // Process transient audio/visual events
     if (stateData.events && stateData.events.length > 0) {
