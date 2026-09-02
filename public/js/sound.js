@@ -9,7 +9,9 @@ class SoundEngine {
     this.engineOsc1 = null;
     this.engineOsc2 = null;
     this.engineFilter = null;
-    this.isEngineRunning = false;
+    this.lastShootTime = 0;
+    this.lastExplosionTime = 0;
+    this.cachedNoiseBuffer = null;
   }
 
   init() {
@@ -17,8 +19,20 @@ class SoundEngine {
     try {
       const AudioCtx = window.AudioContext || window.webkitAudioContext;
       this.ctx = new AudioCtx();
+      this.initNoiseBuffer();
     } catch (e) {
       console.warn('Web Audio API not supported', e);
+    }
+  }
+
+  initNoiseBuffer() {
+    if (!this.ctx || this.cachedNoiseBuffer) return;
+    const duration = 1.2;
+    const bufferSize = Math.floor(this.ctx.sampleRate * duration);
+    this.cachedNoiseBuffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+    const data = this.cachedNoiseBuffer.getChannelData(0);
+    for (let i = 0; i < bufferSize; i++) {
+      data[i] = (Math.random() * 2 - 1) * Math.exp(-i / (this.ctx.sampleRate * 0.3));
     }
   }
 
@@ -87,9 +101,11 @@ class SoundEngine {
     }
   }
 
-  playShoot(isHeavy = false) {
+  playShoot(isHeavy = false, minInterval = 0.09) {
     if (!this.enabled || !this.ctx) return;
     const now = this.ctx.currentTime;
+    if (now - this.lastShootTime < minInterval) return;
+    this.lastShootTime = now;
 
     const osc = this.ctx.createOscillator();
     const gain = this.ctx.createGain();
@@ -97,37 +113,34 @@ class SoundEngine {
 
     osc.type = isHeavy ? 'square' : 'sawtooth';
     osc.frequency.setValueAtTime(isHeavy ? 180 : 320, now);
-    osc.frequency.exponentialRampToValueAtTime(40, now + (isHeavy ? 0.16 : 0.09));
+    osc.frequency.exponentialRampToValueAtTime(40, now + (isHeavy ? 0.14 : 0.08));
 
     filter.type = 'lowpass';
     filter.frequency.setValueAtTime(isHeavy ? 1200 : 2200, now);
 
-    gain.gain.setValueAtTime(isHeavy ? 0.22 : 0.12, now);
-    gain.gain.exponentialRampToValueAtTime(0.001, now + (isHeavy ? 0.16 : 0.09));
+    gain.gain.setValueAtTime(isHeavy ? 0.2 : 0.1, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + (isHeavy ? 0.14 : 0.08));
 
     osc.connect(filter);
     filter.connect(gain);
     gain.connect(this.ctx.destination);
 
     osc.start(now);
-    osc.stop(now + (isHeavy ? 0.16 : 0.09));
+    osc.stop(now + (isHeavy ? 0.14 : 0.08));
   }
 
   playExplosion(isLarge = false) {
     if (!this.enabled || !this.ctx) return;
     const now = this.ctx.currentTime;
-    const duration = isLarge ? 1.4 : 0.8;
+    if (now - this.lastExplosionTime < 0.06) return;
+    this.lastExplosionTime = now;
 
-    // White noise explosion burst
-    const bufferSize = this.ctx.sampleRate * duration;
-    const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
-    const data = buffer.getChannelData(0);
-    for (let i = 0; i < bufferSize; i++) {
-      data[i] = (Math.random() * 2 - 1) * Math.exp(-i / (this.ctx.sampleRate * 0.35));
-    }
+    this.initNoiseBuffer();
+    if (!this.cachedNoiseBuffer) return;
 
+    const duration = isLarge ? 1.0 : 0.6;
     const noise = this.ctx.createBufferSource();
-    noise.buffer = buffer;
+    noise.buffer = this.cachedNoiseBuffer;
 
     const filter = this.ctx.createBiquadFilter();
     filter.type = 'lowpass';
@@ -135,7 +148,7 @@ class SoundEngine {
     filter.frequency.exponentialRampToValueAtTime(60, now + duration);
 
     const gain = this.ctx.createGain();
-    gain.gain.setValueAtTime(isLarge ? 0.4 : 0.25, now);
+    gain.gain.setValueAtTime(isLarge ? 0.35 : 0.2, now);
     gain.gain.exponentialRampToValueAtTime(0.001, now + duration);
 
     noise.connect(filter);
@@ -143,6 +156,7 @@ class SoundEngine {
     gain.connect(this.ctx.destination);
 
     noise.start(now);
+    noise.stop(now + duration);
   }
 
   playRocketLaunch() {

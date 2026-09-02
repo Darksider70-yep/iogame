@@ -248,9 +248,21 @@ class Renderer {
     ctx.restore();
   }
 
+  getViewportBounds(pad = 100) {
+    const halfW = (this.canvas.width / 2) / this.camera.zoom + pad;
+    const halfH = (this.canvas.height / 2) / this.camera.zoom + pad;
+    return {
+      minX: this.camera.x - halfW,
+      maxX: this.camera.x + halfW,
+      minY: this.camera.y - halfH,
+      maxY: this.camera.y + halfH
+    };
+  }
+
   drawOcean(ctx, world) {
     const w = world ? world.width : 6000;
     const h = world ? world.height : 6000;
+    const vp = this.getViewportBounds(150);
 
     ctx.fillStyle = '#0f2438';
     ctx.fillRect(0, 0, w, h);
@@ -259,23 +271,33 @@ class Renderer {
     ctx.lineWidth = 1;
     const gridSize = 120;
 
-    for (let x = 0; x < w; x += gridSize) {
-      ctx.beginPath();
-      ctx.moveTo(x, 0);
-      ctx.lineTo(x, h);
-      ctx.stroke();
+    const startX = Math.max(0, Math.floor(vp.minX / gridSize) * gridSize);
+    const endX = Math.min(w, Math.ceil(vp.maxX / gridSize) * gridSize);
+    const startY = Math.max(0, Math.floor(vp.minY / gridSize) * gridSize);
+    const endY = Math.min(h, Math.ceil(vp.maxY / gridSize) * gridSize);
+
+    ctx.beginPath();
+    for (let x = startX; x <= endX; x += gridSize) {
+      ctx.moveTo(x, Math.max(0, vp.minY));
+      ctx.lineTo(x, Math.min(h, vp.maxY));
     }
-    for (let y = 0; y < h; y += gridSize) {
-      ctx.beginPath();
-      ctx.moveTo(0, y);
-      ctx.lineTo(w, y);
-      ctx.stroke();
+    for (let y = startY; y <= endY; y += gridSize) {
+      ctx.moveTo(Math.max(0, vp.minX), y);
+      ctx.lineTo(Math.min(w, vp.maxX), y);
     }
+    ctx.stroke();
 
     ctx.strokeStyle = 'rgba(255, 255, 255, 0.04)';
     ctx.lineWidth = 2;
-    for (let y = 100; y < h; y += 280) {
-      for (let x = 100; x < w; x += 320) {
+    const waveStepX = 320;
+    const waveStepY = 280;
+    const waveStartX = Math.max(100, Math.floor(vp.minX / waveStepX) * waveStepX);
+    const waveEndX = Math.min(w, Math.ceil(vp.maxX / waveStepX) * waveStepX);
+    const waveStartY = Math.max(100, Math.floor(vp.minY / waveStepY) * waveStepY);
+    const waveEndY = Math.min(h, Math.ceil(vp.maxY / waveStepY) * waveStepY);
+
+    for (let y = waveStartY; y <= waveEndY; y += waveStepY) {
+      for (let x = waveStartX; x <= waveEndX; x += waveStepX) {
         ctx.beginPath();
         const offsetX = Math.sin((y + this.waveOffset) * 0.02) * 15;
         ctx.arc(x + offsetX, y, 20, 0, Math.PI * 0.6);
@@ -296,7 +318,10 @@ class Renderer {
   }
 
   drawIslands(ctx, islands = [], flakTowers = []) {
+    const vp = this.getViewportBounds(200);
+
     islands.forEach(isl => {
+      if (isl.x < vp.minX || isl.x > vp.maxX || isl.y < vp.minY || isl.y > vp.maxY) return;
       ctx.fillStyle = '#d4a373';
       ctx.beginPath();
       ctx.arc(isl.x, isl.y, isl.radius, 0, Math.PI * 2);
@@ -313,6 +338,7 @@ class Renderer {
 
     flakTowers.forEach(flak => {
       if (flak.dead) return;
+      if (flak.x < vp.minX || flak.x > vp.maxX || flak.y < vp.minY || flak.y > vp.maxY) return;
       ctx.save();
       ctx.translate(flak.x, flak.y);
       ctx.rotate(flak.a);
@@ -333,7 +359,10 @@ class Renderer {
   }
 
   drawCrates(ctx, crates = []) {
+    const vp = this.getViewportBounds(60);
+
     crates.forEach(c => {
+      if (c.x < vp.minX || c.x > vp.maxX || c.y < vp.minY || c.y > vp.maxY) return;
       ctx.save();
       ctx.translate(c.x, c.y);
 
@@ -395,7 +424,10 @@ class Renderer {
   }
 
   drawProjectiles(ctx, projectiles = []) {
+    const vp = this.getViewportBounds(50);
+
     projectiles.forEach(proj => {
+      if (proj.x < vp.minX || proj.x > vp.maxX || proj.y < vp.minY || proj.y > vp.maxY) return;
       ctx.save();
       ctx.translate(proj.x, proj.y);
       ctx.rotate(proj.a);
@@ -446,7 +478,10 @@ class Renderer {
   }
 
   drawParticles(ctx) {
+    const vp = this.getViewportBounds(40);
+
     this.particles.forEach(p => {
+      if (p.x < vp.minX || p.x > vp.maxX || p.y < vp.minY || p.y > vp.maxY) return;
       ctx.save();
       const alpha = Math.max(0, p.life / p.maxLife);
 
@@ -478,13 +513,15 @@ class Renderer {
   }
 
   drawClouds(ctx, clouds = []) {
+    const vp = this.getViewportBounds(250);
+
     clouds.forEach(c => {
+      if (c.x < vp.minX || c.x > vp.maxX || c.y < vp.minY || c.y > vp.maxY) return;
       ctx.save();
       ctx.translate(c.x, c.y);
 
-      ctx.fillStyle = 'rgba(240, 246, 252, 0.45)';
-      ctx.shadowColor = 'rgba(255, 255, 255, 0.2)';
-      ctx.shadowBlur = 20;
+      // Clean, hardware-accelerated volumetric clouds without software shadowBlur
+      ctx.fillStyle = 'rgba(240, 246, 252, 0.42)';
 
       for (let i = 0; i < c.puffCount; i++) {
         const pAngle = (i / c.puffCount) * Math.PI * 2;

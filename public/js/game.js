@@ -323,19 +323,27 @@ class GameClient {
         special: isSpecial
       }
     }));
+  }
 
-    // Update sound engine pitch
+  updateAudio() {
+    if (!this.isPlaying) return;
     const self = this.gameState.self;
     if (self) {
+      const isBoosting = this.keys.w || this.keys.shift;
+      const isBraking = this.keys.s;
+      const isShooting = this.keys.lmb || this.keys.space;
       this.sound.updateEngine(1.0, isBoosting, isBraking);
       if (isShooting && !self.ovh) {
-        this.sound.playShoot(self.cls === 'bf109_interceptor' || self.cls === 'me262_jet');
+        const isHeavy = self.cls === 'bf109_interceptor' || self.cls === 'me262_jet' || self.cls === 'b17_fortress';
+        const interval = self.cls === 'mustang_p51' ? 0.08 : self.cls === 'spitfire_ace' ? 0.09 : 0.12;
+        this.sound.playShoot(isHeavy, interval);
       }
     }
   }
 
   start() {
     this.connect();
+    this.inputAccumulator = 0;
 
     const loop = (timestamp) => {
       const dt = Math.min(0.1, (timestamp - this.lastFrameTime) / 1000);
@@ -352,8 +360,15 @@ class GameClient {
         if (fpsEl) fpsEl.textContent = `${this.currentFps} FPS`;
       }
 
-      // Input broadcast (~30-60Hz)
-      this.sendInputs();
+      // Throttled input broadcast to server (Fixed 30Hz network tick)
+      this.inputAccumulator += dt;
+      if (this.inputAccumulator >= 1 / 30) {
+        this.sendInputs();
+        this.inputAccumulator = 0;
+      }
+
+      // Audio update
+      this.updateAudio();
 
       // Render update with full entity interpolation
       const self = this.gameState.self;
